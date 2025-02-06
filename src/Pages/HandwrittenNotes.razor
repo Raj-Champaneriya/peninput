@@ -9,7 +9,7 @@
 
 <!-- 🎨 Color Picker -->
 <label>Color:</label>
-<input id="hw-note-color" type="color" @bind="selectedColor" bind:event="oninput" />
+<input id="hw-note-color" type="color" @bind="selectedColor" bind:event="oninput" @oninput="ChangeColor" />
 
 <canvas id="drawingCanvas" width="800" height="400" style="border:1px solid black;"></canvas>
 
@@ -51,7 +51,8 @@
 
     private async Task ChangeColor(ChangeEventArgs e)
     {
-        selectedColor = e.Value?.ToString() ?? "#000000";
+       selectedColor = e.Value?.ToString() ?? "#000000";
+        Console.WriteLine($"Selected Color: {selectedColor}"); // ✅ Debug log to confirm selection
         await JS.InvokeVoidAsync("setDrawingColor", selectedColor);
     }
 
