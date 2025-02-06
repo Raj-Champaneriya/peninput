@@ -119,7 +119,6 @@
 
         try
         {
-            await Task.Delay(1000, token); // ⏳ Delay auto-save to prevent unnecessary updates
             if (token.IsCancellationRequested) return;
 
             Console.WriteLine("🔄 Auto-saving note...");

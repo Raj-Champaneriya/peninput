@@ -1,6 +1,6 @@
 // Define your drawing functions as before
 let ctx, canvas;
-let drawing = false;
+let isDrawing = false;
 let undoStack = [];
 let redoStack = [];
 let paths = []; // Store strokes for SVG conversion
@@ -32,7 +32,7 @@ window.unregisterBlazorAutoSave = function () {
 
 // 🖍️ Start drawing
 function startDrawing(e) {
-  drawing = true;
+  isDrawing = true;
   // Begin a new path so the drawing is rendered correctly.
   ctx.beginPath();
   ctx.moveTo(e.offsetX, e.offsetY);
@@ -50,30 +50,36 @@ function startDrawing(e) {
 
 // 🖊️ Draw the line
 function draw(e) {
-  if (!drawing) return;
+  if (!isDrawing) return;
   let currentPath = paths[paths.length - 1];
   currentPath.points.push({ x: e.offsetX, y: e.offsetY });
   ctx.lineTo(e.offsetX, e.offsetY);
   ctx.stroke();
+}
 
-  // ✅ Debounce Auto-Save: Prevents excessive calls
-  clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => {
-    let newData = getSVGData();
-    if (newData !== lastSavedData) {
-      lastSavedData = newData;
-      console.log("🚀 Triggering Auto-Save...");
+function stopDrawing() {
+  if (isDrawing) {
+    isDrawing = false; // ✅ User finished drawing
+    setTimeout(() => {
+      if (!isDrawing) {
+        triggerAutoSave(); // ✅ Only auto-save when user is idle
+      }
+    }, 200);
+  }
+  isDrawing = false;
+}
+
+function triggerAutoSave() {
+  let newData = getSVGData();
+  if (newData !== lastSavedData) {
+    lastSavedData = newData;
+    console.log("🚀 Triggering Auto-Save...");
+    if (blazorAutoSaveRef) {
       blazorAutoSaveRef
         .invokeMethodAsync("AutoSave")
         .catch((err) => console.error("Auto-Save failed:", err));
     }
-  }, 5000);
-}
-
-function stopDrawing() {
-  if (drawing) {
   }
-  drawing = false;
 }
 
 // Expose an initialization function that attaches event listeners.
