@@ -5,7 +5,11 @@
 
 <h3>Handwritten Notes</h3>
 
-<input type="text" @bind="title" placeholder="Note Title" />
+<input id="hw-note-title" type="text" @bind="title" placeholder="Note Title" />
+
+<!-- 🎨 Color Picker -->
+<label>Color:</label>
+<input id="hw-note-color" type="color" @bind="selectedColor" bind:event="oninput" />
 
 <canvas id="drawingCanvas" width="800" height="400" style="border:1px solid black;"></canvas>
 
@@ -36,11 +40,19 @@
     private CancellationTokenSource autoSaveCts = new();
     private DotNetObjectReference<HandwrittenNotes>? jsHelper;
     private bool isJsRegistered = false;
+    private string selectedColor = "#000000"; // Default color (black)
+
 
     protected override async Task OnInitializedAsync()
     {
         notes = await NotesService.GetNotesAsync();
 
+    }
+
+    private async Task ChangeColor(ChangeEventArgs e)
+    {
+        selectedColor = e.Value?.ToString() ?? "#000000";
+        await JS.InvokeVoidAsync("setDrawingColor", selectedColor);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

@@ -6,9 +6,15 @@ let redoStack = [];
 let paths = []; // Store strokes for SVG conversion
 let autoSaveTimer = null;
 let blazorAutoSaveRef = null;
+let selectedColor = "#000000"; // Default color (black)
+
+// 🎨 Function to set the drawing color from Blazor
+window.setDrawingColor = function (color) {
+  selectedColor = color;
+  ctx.strokeStyle = selectedColor;
+};
 
 function saveState() {
-  console.log("saveState:", JSON.stringify(paths));
   undoStack.push(JSON.stringify(paths)); // Save stroke paths instead of image
   redoStack = [];
 }
@@ -23,6 +29,7 @@ window.unregisterBlazorAutoSave = function () {
   blazorAutoSaveRef = null;
 };
 
+// 🖍️ Start drawing
 function startDrawing(e) {
   drawing = true;
   // Begin a new path so the drawing is rendered correctly.
@@ -40,6 +47,7 @@ function startDrawing(e) {
   saveState();
 }
 
+// 🖊️ Draw the line
 function draw(e) {
   if (!drawing) return;
   let currentPath = paths[paths.length - 1];
@@ -63,7 +71,6 @@ function draw(e) {
 
 function stopDrawing() {
   if (drawing) {
-    console.log("stopDrawing");
   }
   drawing = false;
 }
@@ -77,6 +84,9 @@ window.initializeCanvas = function () {
     return;
   }
   ctx = canvas.getContext("2d");
+  ctx.lineWidth = 2; // Default stroke width
+  ctx.strokeStyle = selectedColor;
+
   // Attach pointer and mouse events
   canvas.addEventListener("pointerdown", startDrawing);
   canvas.addEventListener("pointermove", draw);
@@ -86,10 +96,11 @@ window.initializeCanvas = function () {
   canvas.addEventListener("mousemove", draw);
   canvas.addEventListener("mouseup", stopDrawing);
   canvas.addEventListener("mouseleave", stopDrawing);
-  console.log("Canvas initialized:", canvas);
+
+  console.log("Canvas initialized with color:", selectedColor);
 };
 
-// Convert the stroke paths to SVG
+// ✍️ Convert strokes to SVG
 window.getSVGData = function () {
   console.log("Generating SVG...");
 
@@ -100,10 +111,10 @@ window.getSVGData = function () {
   });
   svg += `</svg>`;
 
-  console.log("Generated SVG:", svg);
   return svg;
 };
 
+// 🗑️ Clear Canvas
 window.clearCanvas = function () {
   let canvas = document.getElementById("drawingCanvas");
   if (!canvas) {
@@ -122,6 +133,7 @@ window.clearCanvas = function () {
   console.log("Canvas cleared successfully.");
 };
 
+// 📜 Load an SVG into the canvas
 window.loadSVGData = function (svgString) {
   console.log("Loading existing note...");
 
@@ -159,8 +171,6 @@ window.loadSVGData = function (svgString) {
 
     paths.push(newPath); // ✅ Store the stroke in paths array
   });
-
-  console.log("Loaded paths:", paths);
 };
 
 window.undoCanvas = function () {
