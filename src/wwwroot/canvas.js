@@ -1,6 +1,6 @@
 // Pointer Events API allows better handling of touch, stylus, and mouse inputs.
-// It is especially useful for devices like pen tablets and touchscreens.
-// This example adds pressure sensitivity and smooth strokes.
+// It is especially useful for devices like pen tablets, touchscreens, and trackpads.
+// This example supports trackpad, mouse, and stylus input.
 
 let canvas = document.getElementById("drawingCanvas");
 let ctx = canvas.getContext("2d");
@@ -14,24 +14,35 @@ function saveState() {
     redoStack = []; // Clear redo history on new draw
 }
 
-canvas.addEventListener("pointerdown", (e) => {
+function startDrawing(e) {
     drawing = true;
     ctx.beginPath();
     ctx.moveTo(e.offsetX, e.offsetY);
     saveState(); // Save before drawing starts
-});
+}
 
-canvas.addEventListener("pointermove", (e) => {
+function draw(e) {
     if (!drawing) return;
-    ctx.lineWidth = e.pressure * 5 || 2; // Adjust stroke based on pressure
+    let pressure = e.pressure || 0.5; // Default pressure for trackpad/mouse
+    ctx.lineWidth = pressure * 5; // Adjust stroke based on pressure
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineTo(e.offsetX, e.offsetY);
     ctx.stroke();
-});
+}
 
-canvas.addEventListener("pointerup", () => drawing = false);
-canvas.addEventListener("pointerout", () => drawing = false);
+function stopDrawing() {
+    drawing = false;
+}
+
+canvas.addEventListener("pointerdown", startDrawing);
+canvas.addEventListener("pointermove", draw);
+canvas.addEventListener("pointerup", stopDrawing);
+canvas.addEventListener("pointerout", stopDrawing);
+canvas.addEventListener("mousedown", startDrawing);
+canvas.addEventListener("mousemove", draw);
+canvas.addEventListener("mouseup", stopDrawing);
+canvas.addEventListener("mouseleave", stopDrawing);
 
 window.getCanvasData = function () {
     return canvas.toDataURL("image/png");
