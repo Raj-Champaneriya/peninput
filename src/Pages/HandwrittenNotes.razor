@@ -5,10 +5,11 @@
 <h3>Handwritten Notes</h3>
 
 <input type="text" @bind="title" placeholder="Note Title" />
+
 <canvas id="drawingCanvas" width="800" height="400" style="border:1px solid black;"></canvas>
 
 <div>
-    <button @onclick="SaveNote">Save</button>
+    <button @onclick="NewNote">New</button>
     <button @onclick="ClearCanvas">Erase</button>
     <button @onclick="UndoCanvas">Undo</button>
     <button @onclick="RedoCanvas">Redo</button>
@@ -29,6 +30,9 @@
 @code {
     private string title = "Untitled Note";
     private List<HandwrittenNote> notes = new();
+    private Guid? editingNoteId = null;
+    private bool isAutoSaving = false;
+    private CancellationTokenSource autoSaveCts = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -39,28 +43,79 @@
     {
         if (firstRender)
         {
-            // Call a JS function that attaches event listeners to the canvas.
             await JS.InvokeVoidAsync("initializeCanvas");
+        }
+    }
+
+    private async Task NewNote()
+    {
+        title = "Untitled Note";
+        editingNoteId = null; // Mark as a new note
+        await ClearCanvas();
+        await JS.InvokeVoidAsync("initializeCanvas"); // Ensure JS knows about the canvas
+    }
+
+    private async Task LoadNote(HandwrittenNote note)
+    {
+        editingNoteId = note.Id; // Mark as an existing note
+        title = note.Title;
+        await JS.InvokeVoidAsync("loadSVGData", note.SVGData);
+    }
+
+    private async Task AutoSave()
+    {
+        if (isAutoSaving) return;
+        isAutoSaving = true;
+
+        autoSaveCts?.Cancel(); // Cancel any previous auto-save task
+        autoSaveCts = new CancellationTokenSource();
+        var token = autoSaveCts.Token;
+
+        try
+        {
+            await Task.Delay(5000, token); // Wait for 5 seconds
+            if (token.IsCancellationRequested) return;
+
+            Console.WriteLine("Auto-saving...");
+            await SaveNote();
+        }
+        catch (TaskCanceledException) { }
+        finally
+        {
+            isAutoSaving = false;
         }
     }
 
     private async Task SaveNote()
     {
         string svgData = await JS.InvokeAsync<string>("getSVGData");
-        var newNote = new HandwrittenNote { Title = title, SVGData = svgData };
-        await NotesService.AddNoteAsync(newNote);
-        notes.Add(newNote);
-    }
 
-    private async Task LoadNote(HandwrittenNote note)
-    {
-        await JS.InvokeVoidAsync("loadSVGData", note.SVGData);
+        if (editingNoteId == null)
+        {
+            // Create a new note
+            var newNote = new HandwrittenNote { Title = title, SVGData = svgData };
+            await NotesService.AddNoteAsync(newNote);
+            notes.Add(newNote);
+            editingNoteId = newNote.Id; // Now it's being edited
+        }
+        else
+        {
+            // Update the existing note
+            await NotesService.UpdateNoteAsync(editingNoteId.Value, title, svgData);
+            var note = notes.FirstOrDefault(n => n.Id == editingNoteId);
+            if (note != null)
+            {
+                note.Title = title;
+                note.SVGData = svgData;
+            }
+        }
     }
 
     private async Task ClearCanvas()
     {
         await JS.InvokeVoidAsync("clearCanvas");
     }
+
     private async Task UndoCanvas() => await JS.InvokeVoidAsync("undoCanvas");
     private async Task RedoCanvas() => await JS.InvokeVoidAsync("redoCanvas");
 }

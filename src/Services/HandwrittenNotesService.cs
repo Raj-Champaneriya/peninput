@@ -18,4 +18,14 @@ public class HandwrittenNotesService
         _context.HandwrittenNotes.Add(note);
         await _context.SaveChangesAsync();
     }
+    public async Task UpdateNoteAsync(Guid noteId, string title, string svgData)
+    {
+        var note = await _context.HandwrittenNotes.FindAsync(noteId);
+        if (note != null)
+        {
+            note.Title = title;
+            note.SVGData = svgData;
+            await _context.SaveChangesAsync();
+        }
+    }
 }
