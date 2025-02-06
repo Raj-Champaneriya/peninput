@@ -7,26 +7,29 @@ let ctx = canvas.getContext("2d");
 let drawing = false;
 let undoStack = [];
 let redoStack = [];
+let paths = []; // Store strokes for SVG conversion
 
-// Save the current canvas state
 function saveState() {
-    undoStack.push(canvas.toDataURL());
-    redoStack = []; // Clear redo history on new draw
+    undoStack.push(JSON.stringify(paths)); // Save stroke paths instead of image
+    redoStack = [];
 }
 
 function startDrawing(e) {
     drawing = true;
-    ctx.beginPath();
-    ctx.moveTo(e.offsetX, e.offsetY);
-    saveState(); // Save before drawing starts
+    let newPath = {
+        color: ctx.strokeStyle,
+        width: ctx.lineWidth,
+        points: [{ x: e.offsetX, y: e.offsetY }]
+    };
+    paths.push(newPath);
+    saveState();
 }
 
 function draw(e) {
     if (!drawing) return;
-    let pressure = e.pressure || 0.5; // Default pressure for trackpad/mouse
-    ctx.lineWidth = pressure * 5; // Adjust stroke based on pressure
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    let currentPath = paths[paths.length - 1];
+    currentPath.points.push({ x: e.offsetX, y: e.offsetY });
+
     ctx.lineTo(e.offsetX, e.offsetY);
     ctx.stroke();
 }
@@ -44,14 +47,42 @@ canvas.addEventListener("mousemove", draw);
 canvas.addEventListener("mouseup", stopDrawing);
 canvas.addEventListener("mouseleave", stopDrawing);
 
-window.getCanvasData = function () {
-    return canvas.toDataURL("image/png");
+// Convert the stroke paths to SVG
+window.getSVGData = function () {
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}">`;
+    paths.forEach(path => {
+        let d = `M ${path.points.map(p => `${p.x},${p.y}`).join(" L ")}`;
+        svg += `<path d="${d}" stroke="${path.color}" stroke-width="${path.width}" fill="none"/>`;
+    });
+    svg += `</svg>`;
+    return svg;
 };
 
 window.clearCanvas = function () {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    paths = [];
     undoStack = [];
     redoStack = [];
+};
+
+// Load an SVG drawing into the canvas
+window.loadSVGData = function (svgString) {
+    let parser = new DOMParser();
+    let svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+    let paths = svgDoc.querySelectorAll("path");
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    paths.forEach(path => {
+        let d = path.getAttribute("d").split("L").map(p => p.trim().replace("M ", "").split(","));
+        ctx.beginPath();
+        ctx.moveTo(d[0][0], d[0][1]);
+        for (let i = 1; i < d.length; i++) {
+            ctx.lineTo(d[i][0], d[i][1]);
+        }
+        ctx.strokeStyle = path.getAttribute("stroke");
+        ctx.lineWidth = parseFloat(path.getAttribute("stroke-width"));
+        ctx.stroke();
+    });
 };
 
 window.undoCanvas = function () {

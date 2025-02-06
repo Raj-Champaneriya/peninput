@@ -3,25 +3,55 @@
 @inject IJSRuntime JS
 
 <h3>Handwritten Notes</h3>
+
 <input type="text" @bind="title" placeholder="Note Title" />
 <canvas id="drawingCanvas" width="800" height="400" style="border:1px solid black;"></canvas>
 
-<button @onclick="SaveNote">Save</button>
-<button @onclick="ClearCanvas">Erase</button>
-<button @onclick="UndoCanvas">Undo</button>
-<button @onclick="RedoCanvas">Redo</button>
+<div>
+    <button @onclick="SaveNote">Save</button>
+    <button @onclick="ClearCanvas">Erase</button>
+    <button @onclick="UndoCanvas">Undo</button>
+    <button @onclick="RedoCanvas">Redo</button>
+</div>
+
+<h3>Saved Notes</h3>
+<ul>
+    @foreach (var note in notes)
+    {
+        <li @onclick="() => LoadNote(note)">
+            <strong>@note.Title</strong>
+            <span>(@note.CreatedAt)</span>
+            <div>@(new MarkupString(note.SVGData))</div>
+        </li>
+    }
+</ul>
 
 @code {
     private string title = "Untitled Note";
+    private List<HandwrittenNote> notes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        notes = await NotesService.GetNotesAsync();
+    }
 
     private async Task SaveNote()
     {
-        string svgData = await JS.InvokeAsync<string>("getCanvasData");
+        string svgData = await JS.InvokeAsync<string>("getSVGData");
         var newNote = new HandwrittenNote { Title = title, SVGData = svgData };
         await NotesService.AddNoteAsync(newNote);
+        notes.Add(newNote);
     }
 
-    private async Task ClearCanvas() => await JS.InvokeVoidAsync("clearCanvas");
+    private async Task LoadNote(HandwrittenNote note)
+    {
+        await JS.InvokeVoidAsync("loadSVGData", note.SVGData);
+    }
+
+    private async Task ClearCanvas()
+    {
+        await JS.InvokeVoidAsync("clearCanvas");
+    }
     private async Task UndoCanvas() => await JS.InvokeVoidAsync("undoCanvas");
     private async Task RedoCanvas() => await JS.InvokeVoidAsync("redoCanvas");
 }
