@@ -1,6 +1,7 @@
 @page "/handwritten-notes"
 @inject HandwrittenNotesService NotesService
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <h3>Handwritten Notes</h3>
 
@@ -34,20 +35,22 @@
     private bool isAutoSaving = false;
     private CancellationTokenSource autoSaveCts = new();
     private DotNetObjectReference<HandwrittenNotes>? jsHelper;
-
+    private bool isJsRegistered = false;
 
     protected override async Task OnInitializedAsync()
     {
         notes = await NotesService.GetNotesAsync();
-        jsHelper = DotNetObjectReference.Create(this);
-        await JS.InvokeVoidAsync("registerBlazorAutoSave", jsHelper);
+
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && !isJsRegistered)
         {
+            jsHelper = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("registerBlazorAutoSave", jsHelper);
             await JS.InvokeVoidAsync("initializeCanvas");
+            isJsRegistered = true;
         }
     }
 
@@ -66,7 +69,7 @@
         await JS.InvokeVoidAsync("loadSVGData", note.SVGData);
     }
 
-    [JSInvokable("AutoSave")] 
+    [JSInvokable("AutoSave")]
     public async Task AutoSave()
     {
         if (editingNoteId == null) return; // Don't save if there's no active note
