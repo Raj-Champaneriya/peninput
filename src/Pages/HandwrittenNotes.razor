@@ -5,6 +5,14 @@
 
 <h3>Handwritten Notes</h3>
 
+@if (isAutoSaving)
+{
+    <div class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Saving...</p>
+    </div>
+}
+
 <input id="hw-note-title" type="text" @bind="Title" placeholder="Note Title" />
 
 <!-- 🎨 Color Picker -->
@@ -31,6 +39,8 @@
         </li>
     }
 </ul>
+
+<link href="css/HandwrittenNotes.css" rel="stylesheet">
 
 @code {
     private string title = "Untitled Note";
@@ -90,8 +100,8 @@
 
         title = Title; // Save current title
         editingNoteId = null; // Mark as a new note
-        await ClearCanvas();
-        await JS.InvokeVoidAsync("initializeCanvas"); // Ensure JS knows about the canvas
+        // await ClearCanvas();
+        // await JS.InvokeVoidAsync("initializeCanvas"); // Ensure JS knows about the canvas
 
         await SaveNote(); // Ensure SaveNote() is explicitly called
     }
@@ -107,11 +117,13 @@
     [JSInvokable("AutoSave")]
     public async Task AutoSave()
     {
-        if (editingNoteId == null || isDisposed) return; // ✅ Prevent auto-save if disposed
+        if (editingNoteId == null || isDisposed || isAutoSaving) return; // ✅ Prevent auto-save if disposed
 
         Console.WriteLine("🔄 Auto-saving note...");
 
         isAutoSaving = true;
+        await JS.InvokeVoidAsync("blockUserInput", true); // 🚫 Block input
+        InvokeAsync(StateHasChanged);
 
         autoSaveCts?.Cancel();
         autoSaveCts = new CancellationTokenSource();
@@ -127,17 +139,24 @@
 
             // Update note in database without forcing re-render
             await NotesService.UpdateNoteAsync(editingNoteId.Value, title, svgData);
-
-            // ✅ Only update UI state if needed
-            InvokeAsync(StateHasChanged);
         }
         catch (TaskCanceledException)
         {
             Console.WriteLine("⚠️ AutoSave was cancelled");
         }
+        catch (JSDisconnectedException ex)
+        {
+            Console.WriteLine($"⚠️ JSInterop disconnected: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ ERROR: {ex.Message}");
+        }
         finally
         {
             isAutoSaving = false;
+            await JS.InvokeVoidAsync("blockUserInput", false); // ✅ Unblock input
+            InvokeAsync(StateHasChanged);
         }
     }
 

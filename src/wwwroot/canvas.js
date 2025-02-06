@@ -8,6 +8,18 @@ let autoSaveTimer = null;
 let blazorAutoSaveRef = null;
 let selectedColor = "#000000"; // Default color (black)
 let lastSavedData = ""; // ✅ Track last saved state to avoid duplicate saves
+let isSaving = false; // Track auto-save state
+
+window.blockUserInput = function (status) {
+  isSaving = status;
+  if (isSaving) {
+    console.log("🚫 Blocking user input during auto-save...");
+    canvas.style.pointerEvents = "none"; // Disable drawing
+  } else {
+    console.log("✅ Unblocking user input...");
+    canvas.style.pointerEvents = "auto"; // Enable drawing
+  }
+};
 
 // 🎨 Function to set the drawing color from Blazor
 window.setDrawingColor = function (color) {
@@ -55,17 +67,15 @@ function draw(e) {
   currentPath.points.push({ x: e.offsetX, y: e.offsetY });
   ctx.lineTo(e.offsetX, e.offsetY);
   ctx.stroke();
+
+  setTimeout(() => {
+    if (!isDrawing) {
+      triggerAutoSave(); // ✅ Only auto-save when user is idle
+    }
+  }, 5000);
 }
 
 function stopDrawing() {
-  if (isDrawing) {
-    isDrawing = false; // ✅ User finished drawing
-    setTimeout(() => {
-      if (!isDrawing) {
-        triggerAutoSave(); // ✅ Only auto-save when user is idle
-      }
-    }, 200);
-  }
   isDrawing = false;
 }
 
