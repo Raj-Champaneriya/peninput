@@ -23,13 +23,11 @@ public class HandwrittenNotesService
         var note = await _context.HandwrittenNotes.FindAsync(noteId);
         if (note != null)
         {
-            if (note.SVGData != svgData) // Only update if there's a change
-            {
-                note.Title = title;
-                note.SVGData = svgData;
-                note.CreatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
-            }
+            if (note.SVGData == svgData) return; // ✅ Skip saving if no changes detected
+
+            note.Title = title;
+            note.SVGData = svgData;
+            await _context.SaveChangesAsync();
         }
     }
 }

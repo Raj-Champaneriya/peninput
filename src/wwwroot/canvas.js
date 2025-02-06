@@ -7,6 +7,7 @@ let paths = []; // Store strokes for SVG conversion
 let autoSaveTimer = null;
 let blazorAutoSaveRef = null;
 let selectedColor = "#000000"; // Default color (black)
+let lastSavedData = ""; // ✅ Track last saved state to avoid duplicate saves
 
 // 🎨 Function to set the drawing color from Blazor
 window.setDrawingColor = function (color) {
@@ -55,18 +56,18 @@ function draw(e) {
   ctx.lineTo(e.offsetX, e.offsetY);
   ctx.stroke();
 
-  // Restart auto-save timer on every drawing event
+  // ✅ Debounce Auto-Save: Prevents excessive calls
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
-    if (blazorAutoSaveRef) {
+    let newData = getSVGData();
+    if (newData !== lastSavedData) {
+      lastSavedData = newData;
       console.log("🚀 Triggering Auto-Save...");
       blazorAutoSaveRef
-        .invokeMethodAsync("AutoSave") // ✅ Ensure method name matches C#
+        .invokeMethodAsync("AutoSave")
         .catch((err) => console.error("Auto-Save failed:", err));
-    } else {
-      console.warn("⚠️ Auto-Save Ref is null");
     }
-  }, 1000);
+  }, 5000);
 }
 
 function stopDrawing() {
@@ -198,3 +199,10 @@ window.redoCanvas = function () {
     };
   }
 };
+
+// Stop AutoSave if the page is closing
+window.addEventListener("beforeunload", function () {
+  console.log("⚠️ Page is unloading. Stopping Auto-Save.");
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = null;
+});

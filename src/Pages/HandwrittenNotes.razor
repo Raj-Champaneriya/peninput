@@ -41,7 +41,7 @@
     private DotNetObjectReference<HandwrittenNotes>? jsHelper;
     private bool isJsRegistered = false;
     private string selectedColor = "#000000"; // Default color (black)
-
+    private bool isDisposed = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -51,14 +51,14 @@
 
     private async Task ChangeColor(ChangeEventArgs e)
     {
-       selectedColor = e.Value?.ToString() ?? "#000000";
+        selectedColor = e.Value?.ToString() ?? "#000000";
         Console.WriteLine($"Selected Color: {selectedColor}"); // ✅ Debug log to confirm selection
         await JS.InvokeVoidAsync("setDrawingColor", selectedColor);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !isJsRegistered)
+        if (firstRender && !isJsRegistered && !isDisposed)
         {
             jsHelper = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("registerBlazorAutoSave", jsHelper);
@@ -85,17 +85,54 @@
     [JSInvokable("AutoSave")]
     public async Task AutoSave()
     {
-        if (editingNoteId == null) return; // Don't save if there's no active note
-        Console.WriteLine("Auto-saving note...");
+        if (editingNoteId == null || isDisposed) return; // ✅ Prevent auto-save if disposed
 
-        string svgData = await JS.InvokeAsync<string>("getSVGData");
-        await NotesService.UpdateNoteAsync(editingNoteId.Value, title, svgData);
+        Console.WriteLine("🔄 Auto-saving note...");
+
+        isAutoSaving = true;
+
+        autoSaveCts?.Cancel();
+        autoSaveCts = new CancellationTokenSource();
+        var token = autoSaveCts.Token;
+        try
+        {
+            await Task.Delay(1000, token); // ⏳ Delay auto-save to prevent unnecessary updates
+            if (token.IsCancellationRequested) return;
+
+            Console.WriteLine("🔄 Auto-saving note...");
+
+            string svgData = await JS.InvokeAsync<string>("getSVGData");
+
+            // Update note in database without forcing re-render
+            await NotesService.UpdateNoteAsync(editingNoteId.Value, title, svgData);
+
+            // ✅ Only update UI state if needed
+            InvokeAsync(StateHasChanged);
+        }
+        catch (TaskCanceledException)
+        {
+            Console.WriteLine("⚠️ AutoSave was cancelled");
+        }
+        finally
+        {
+            isAutoSaving = false;
+        }
     }
+
     public async ValueTask DisposeAsync()
     {
+        isDisposed = true; // ✅ Prevent further JS calls
+
         if (jsHelper != null)
         {
-            await JS.InvokeVoidAsync("unregisterBlazorAutoSave");
+            try
+            {
+                await JS.InvokeVoidAsync("unregisterBlazorAutoSave");
+            }
+            catch (JSDisconnectedException)
+            {
+                Console.WriteLine("⚠️ JSInterop call ignored due to disconnection.");
+            }
             jsHelper.Dispose();
         }
     }
