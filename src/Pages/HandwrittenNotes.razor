@@ -1,0 +1,27 @@
+@page "/handwritten-notes"
+@inject HandwrittenNotesService NotesService
+@inject IJSRuntime JS
+
+<h3>Handwritten Notes</h3>
+<input type="text" @bind="title" placeholder="Note Title" />
+<canvas id="drawingCanvas" width="800" height="400" style="border:1px solid black;"></canvas>
+
+<button @onclick="SaveNote">Save</button>
+<button @onclick="ClearCanvas">Erase</button>
+<button @onclick="UndoCanvas">Undo</button>
+<button @onclick="RedoCanvas">Redo</button>
+
+@code {
+    private string title = "Untitled Note";
+
+    private async Task SaveNote()
+    {
+        string svgData = await JS.InvokeAsync<string>("getCanvasData");
+        var newNote = new HandwrittenNote { Title = title, SVGData = svgData };
+        await NotesService.AddNoteAsync(newNote);
+    }
+
+    private async Task ClearCanvas() => await JS.InvokeVoidAsync("clearCanvas");
+    private async Task UndoCanvas() => await JS.InvokeVoidAsync("undoCanvas");
+    private async Task RedoCanvas() => await JS.InvokeVoidAsync("redoCanvas");
+}
