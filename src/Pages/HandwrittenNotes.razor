@@ -5,7 +5,7 @@
 
 <h3>Handwritten Notes</h3>
 
-<input id="hw-note-title" type="text" @bind="title" placeholder="Note Title" />
+<input id="hw-note-title" type="text" @bind="Title" placeholder="Note Title" />
 
 <!-- 🎨 Color Picker -->
 <label>Color:</label>
@@ -43,10 +43,24 @@
     private string selectedColor = "#000000"; // Default color (black)
     private bool isDisposed = false;
 
+    private string _title = "Untitled Note";
+
+    private string Title
+    {
+        get => _title;
+        set
+        {
+            if (_title != value) // Only save if changed
+            {
+                _title = value;
+                AutoSave(); // Trigger auto-save when title is updated
+            }
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         notes = await NotesService.GetNotesAsync();
-
     }
 
     private async Task ChangeColor(ChangeEventArgs e)
@@ -58,27 +72,35 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !isJsRegistered && !isDisposed)
+        if (!isDisposed)
         {
-            jsHelper = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("registerBlazorAutoSave", jsHelper);
-            await JS.InvokeVoidAsync("initializeCanvas");
-            isJsRegistered = true;
+            if (!isJsRegistered || firstRender)
+            {
+                jsHelper = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("registerBlazorAutoSave", jsHelper);
+                await JS.InvokeVoidAsync("initializeCanvas");
+                isJsRegistered = true;
+            }
         }
     }
 
     private async Task NewNote()
     {
-        title = "Untitled Note";
+        Console.WriteLine("🆕 NewNote() triggered"); // DEBUG LOG
+
+        title = Title; // Save current title
         editingNoteId = null; // Mark as a new note
         await ClearCanvas();
         await JS.InvokeVoidAsync("initializeCanvas"); // Ensure JS knows about the canvas
+
+        await SaveNote(); // Ensure SaveNote() is explicitly called
     }
 
     private async Task LoadNote(HandwrittenNote note)
     {
         editingNoteId = note.Id; // Mark as an existing note
         title = note.Title;
+        Title = note.Title; // Update title
         await JS.InvokeVoidAsync("loadSVGData", note.SVGData);
     }
 
@@ -94,6 +116,7 @@
         autoSaveCts?.Cancel();
         autoSaveCts = new CancellationTokenSource();
         var token = autoSaveCts.Token;
+
         try
         {
             await Task.Delay(1000, token); // ⏳ Delay auto-save to prevent unnecessary updates
@@ -139,26 +162,24 @@
 
     private async Task SaveNote()
     {
+        Console.WriteLine($"📌 SaveNote() triggered with title: {title}"); // DEBUG LOG
+
         string svgData = await JS.InvokeAsync<string>("getSVGData");
 
         if (editingNoteId == null)
         {
-            // Create a new note
+            Console.WriteLine("🆕 Creating new note..."); // DEBUG LOG
             var newNote = new HandwrittenNote { Title = title, SVGData = svgData };
+
             await NotesService.AddNoteAsync(newNote);
-            notes.Add(newNote);
-            editingNoteId = newNote.Id; // Now it's being edited
+            editingNoteId = newNote.Id;
+
+            Console.WriteLine($"✅ New note saved with ID: {newNote.Id}"); // DEBUG LOG
         }
         else
         {
-            // Update the existing note
+            Console.WriteLine($"✍️ Updating existing note: {editingNoteId}");
             await NotesService.UpdateNoteAsync(editingNoteId.Value, title, svgData);
-            var note = notes.FirstOrDefault(n => n.Id == editingNoteId);
-            if (note != null)
-            {
-                note.Title = title;
-                note.SVGData = svgData;
-            }
         }
     }
 
