@@ -91,14 +91,15 @@ window.initializeCanvas = function () {
 
 // Convert the stroke paths to SVG
 window.getSVGData = function () {
-  console.log("getSVGData, current paths:", paths);
+  console.log("Generating SVG...");
+
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}">`;
   paths.forEach((path) => {
-    // Build the 'd' attribute for each stroke
     let d = `M ${path.points.map((p) => `${p.x},${p.y}`).join(" L ")}`;
     svg += `<path d="${d}" stroke="${path.color}" stroke-width="${path.width}" fill="none"/>`;
   });
   svg += `</svg>`;
+
   console.log("Generated SVG:", svg);
   return svg;
 };
@@ -121,28 +122,45 @@ window.clearCanvas = function () {
   console.log("Canvas cleared successfully.");
 };
 
-// Load an SVG drawing into the canvas (redraw based on the path data)
 window.loadSVGData = function (svgString) {
-  console.log("loadSVGData called");
+  console.log("Loading existing note...");
+
   let parser = new DOMParser();
   let svgDoc = parser.parseFromString(svgString, "image/svg+xml");
   let svgPaths = svgDoc.querySelectorAll("path");
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  paths = []; // ✅ Reset paths before loading new ones
+
   svgPaths.forEach((path) => {
+    let strokeColor = path.getAttribute("stroke");
+    let strokeWidth = parseFloat(path.getAttribute("stroke-width"));
     let d = path
       .getAttribute("d")
       .split("L")
       .map((p) => p.trim().replace("M ", "").split(","));
+
+    if (d.length < 2) return; // Skip invalid strokes
+
+    // ✅ Store old strokes in paths array
+    let newPath = { color: strokeColor, width: strokeWidth, points: [] };
+
     ctx.beginPath();
     ctx.moveTo(d[0][0], d[0][1]);
+    newPath.points.push({ x: d[0][0], y: d[0][1] });
+
     for (let i = 1; i < d.length; i++) {
       ctx.lineTo(d[i][0], d[i][1]);
+      newPath.points.push({ x: d[i][0], y: d[i][1] });
     }
-    ctx.strokeStyle = path.getAttribute("stroke");
-    ctx.lineWidth = parseFloat(path.getAttribute("stroke-width"));
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = strokeWidth;
     ctx.stroke();
+
+    paths.push(newPath); // ✅ Store the stroke in paths array
   });
+
+  console.log("Loaded paths:", paths);
 };
 
 window.undoCanvas = function () {
