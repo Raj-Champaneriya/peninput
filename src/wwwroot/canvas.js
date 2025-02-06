@@ -4,6 +4,8 @@ let drawing = false;
 let undoStack = [];
 let redoStack = [];
 let paths = []; // Store strokes for SVG conversion
+let autoSaveTimer = null;
+let blazorAutoSaveRef = null;
 
 function saveState() {
   console.log("saveState:", JSON.stringify(paths));
@@ -11,8 +13,17 @@ function saveState() {
   redoStack = [];
 }
 
+window.registerBlazorAutoSave = function (blazorInstance) {
+  console.log("✅ Blazor Auto-Save Registered");
+  blazorAutoSaveRef = blazorInstance;
+};
+
+window.unregisterBlazorAutoSave = function () {
+  console.log("❌ Blazor Auto-Save Unregistered");
+  blazorAutoSaveRef = null;
+};
+
 function startDrawing(e) {
-  console.log("startDrawing at", e.offsetX, e.offsetY);
   drawing = true;
   // Begin a new path so the drawing is rendered correctly.
   ctx.beginPath();
@@ -31,16 +42,22 @@ function startDrawing(e) {
 
 function draw(e) {
   if (!drawing) return;
-  console.log("draw at", e.offsetX, e.offsetY);
   let currentPath = paths[paths.length - 1];
   currentPath.points.push({ x: e.offsetX, y: e.offsetY });
   ctx.lineTo(e.offsetX, e.offsetY);
   ctx.stroke();
 
-  // Notify Blazor to auto-save
-  clearTimeout(window.autoSaveTimer);
-  window.autoSaveTimer = setTimeout(() => {
-    DotNet.invokeMethodAsync("IMS.WebApp", "AutoSave"); // Call AutoSave() in Blazor
+  // Restart auto-save timer on every drawing event
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => {
+    if (blazorAutoSaveRef) {
+      console.log("🚀 Triggering Auto-Save...");
+      blazorAutoSaveRef
+        .invokeMethodAsync("AutoSave") // ✅ Ensure method name matches C#
+        .catch((err) => console.error("Auto-Save failed:", err));
+    } else {
+      console.warn("⚠️ Auto-Save Ref is null");
+    }
   }, 1000);
 }
 
@@ -89,13 +106,13 @@ window.getSVGData = function () {
 window.clearCanvas = function () {
   let canvas = document.getElementById("drawingCanvas");
   if (!canvas) {
-      console.error("clearCanvas: Canvas element not found!");
-      return;
+    console.error("clearCanvas: Canvas element not found!");
+    return;
   }
   let ctx = canvas.getContext("2d");
   if (!ctx) {
-      console.error("clearCanvas: Could not get canvas context!");
-      return;
+    console.error("clearCanvas: Could not get canvas context!");
+    return;
   }
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   paths = [];
@@ -103,7 +120,6 @@ window.clearCanvas = function () {
   redoStack = [];
   console.log("Canvas cleared successfully.");
 };
-
 
 // Load an SVG drawing into the canvas (redraw based on the path data)
 window.loadSVGData = function (svgString) {
