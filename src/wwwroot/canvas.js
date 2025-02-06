@@ -68,6 +68,13 @@ function draw(e) {
   ctx.lineTo(e.offsetX, e.offsetY);
   ctx.stroke();
 
+   // Clear the previous timer
+   if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+
+  // Set a new timer
   setTimeout(() => {
     if (!isDrawing) {
       triggerAutoSave(); // ✅ Only auto-save when user is idle
@@ -191,34 +198,40 @@ window.loadSVGData = function (svgString) {
 };
 
 window.undoCanvas = function () {
-  console.log("undoCanvas called");
   if (undoStack.length > 0) {
-    redoStack.push(canvas.toDataURL());
-    let imgData = new Image();
-    imgData.src = undoStack.pop();
-    imgData.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(imgData, 0, 0);
-    };
+    redoStack.push(JSON.stringify(paths)); // Save current state to redo
+    paths = JSON.parse(undoStack.pop()); // Restore previous state
+    redrawCanvas(); // Function to redraw based on paths
   }
 };
 
 window.redoCanvas = function () {
-  console.log("redoCanvas called");
   if (redoStack.length > 0) {
-    undoStack.push(canvas.toDataURL());
-    let imgData = new Image();
-    imgData.src = redoStack.pop();
-    imgData.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(imgData, 0, 0);
-    };
+    undoStack.push(JSON.stringify(paths)); // Save current state to undo
+    paths = JSON.parse(redoStack.pop()); // Restore next state
+    redrawCanvas();
   }
 };
+
+function redrawCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  paths.forEach(path => {
+    ctx.beginPath();
+    ctx.strokeStyle = path.color;
+    ctx.lineWidth = path.width;
+    ctx.moveTo(path.points[0].x, path.points[0].y);
+    path.points.forEach(point => ctx.lineTo(point.x, point.y));
+    ctx.stroke();
+  });
+}
 
 // Stop AutoSave if the page is closing
 window.addEventListener("beforeunload", function () {
   console.log("⚠️ Page is unloading. Stopping Auto-Save.");
   clearTimeout(autoSaveTimer);
   autoSaveTimer = null;
+  isDrawing = false;
+  isSaving = false;
+  ctx = null;
+  canvas = null;
 });
